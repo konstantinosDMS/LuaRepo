@@ -1,5 +1,3 @@
 # LuaRepo
-Programming in Lua - Several Concepts after reading the official book
-
-After reading the official book and describing several design concepts, i demo my examples in various points i consider valued to mention and keep it on line
+Experimenting with lua-programming_in_lua_4th_edition I posted my notes
 
