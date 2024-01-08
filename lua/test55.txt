@@ -1,4 +1,0 @@
-3	5
-3	4	3	5
-ko            stas di         module   s
-ko                                         stas di                              module         s
