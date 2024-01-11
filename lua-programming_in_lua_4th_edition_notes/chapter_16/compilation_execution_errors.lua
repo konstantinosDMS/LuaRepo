@@ -330,27 +330,30 @@ foo({x = 1}) -- here is whr lua reports the error function, who call
 -- end
 -- ) end)
 --]===]
-
+--[====[
 --  Exercise 16.1  --
 
---[[ local loadwithprefix = function(...) return (...) .. ":" .. 1 + 2 end
-print(loadwithprefix('kostas')) -- kostas: 3 --]]
---[[ it need metatable to set the enovronment variable to local scope
+-- local loadwithprefix = function(...) return (...) .. ":" .. 1 + 2 end
+-- print(loadwithprefix('kostas')) -- kostas: 3 --]]
+-- it needs metatable to set the enovronment variable to local scope
 local loadwithprefix_1 = function(declaration, prefix, code)
     local code1, code2, code3, error1, error2, error3 = nil, nil, nil, nil, nil, nil
     return function()
-        code1, error1 = load(declaration)
-        if code1 ~= nil then
-            code2, error2 = load(code)
-            if code2 ~= nil then
-                code3, error3 = load(prefix)
-                if code3 ~= nil then
-                    return code1, code2, code3
-                else print('Failed load code3')
+        code1 = load(declaration)
+        if code1 then
+            code2 = load(prefix)
+            if code2 then 
+                code3 = load(code)
+                if code3 then
+                    return code1, code3, code2
+                else 
+                    error('Error when compiling code')
                 end
-            else print('Failed load code2')
-            end
-        else print('Failed load code1')
+            else
+                error('Error while compiling prefix')
+            end 
+        else
+            print('error compiling declaration')
         end
     end
 end
@@ -359,70 +362,15 @@ local declaration = 'local j = 0'
 local code = 'j = j + 3'
 local prefix = 'return j'  
 
-local res1, res2, res3, result
-result = loadwithprefix_1(declaration, code, prefix)
-res1, res2, res3 = result ()
+local res1, res2, res3, err, result
+result = loadwithprefix_1(declaration, prefix, code)
+res1, res2, res3, err = result ()
 
 if res1 ~= nil and res2 ~= nil and res3 ~= nil then
-    res1() res2() res3()
+    print(res1(), res2(), res3())
 end
---]]
---[[  setfenv deprecated 
-local loadwithprefix_1 = function(declaration, prefix, code)
-    local code1, code2, code3, error1, error2, error3 = nil, nil, nil, nil, nil, nil
-    return function()
-        code1, error1 = load(declaration)
-        if code1 ~= nil then
-            local env1 = {}  -- Create a new environment for code1
-            setmetatable(env1, { __index = _G })  -- Set _G as the fallback
-
-            setfenv(code1, env1)
-
-            code2, error2 = load(code)
-            if code2 ~= nil then
-                local env2 = {}  -- Create a new environment for code2
-                setmetatable(env2, { __index = env1 })  -- Set env1 as the fallback
-
-                setfenv(code2, env2)
-
-                code3, error3 = load(prefix)
-                if code3 ~= nil then
-                    local env3 = {}  -- Create a new environment for code3
-                    setmetatable(env3, { __index = env2 })  -- Set env2 as the fallback
-
-                    setfenv(code3, env3)
-
-                    return code1, code2, code3
-                else
-                    print('Failed load code3:', error3)
-                end
-            else
-                print('Failed load code2:', error2)
-            end
-        else
-            print('Failed load code1:', error1)
-        end
-    end
-end
-
-local declaration = 'local j = 0'
-local code = 'j = j + 3'
-local prefix = 'return j'
-
-local res1, res2, res3, result
-result = loadwithprefix_1(declaration, code, prefix)
-res1, res2, res3 = result()
-
-if res1 ~= nil and res2 ~= nil and res3 ~= nil then
-    res1() res2() res3()
-end    
---]]
---[[
-local aa = function() local i = 0; i = i + 3; return i; end
-aa = aa()
-print(aa)
---]]
---[[
+--]====]
+--[===[
 local loadwithprefix_2 = function(prefix, code)
 	local var1, var2 , error1, error2 = nil, nil, nil, nil 
 	return function()
@@ -449,7 +397,7 @@ if res1 ~= nil and res2 ~= nil then
 else 
     print('Error ...')
 end
---]]
+--]===]
 
 --[[
 1) no concatentation meaning every piece of data should be loaded() seperately
@@ -479,7 +427,6 @@ rr = function(...)
 local dd = function(...) local g = 0; g = g + 3; print(rr(g)) end
 print(dd())
 --]===]
-
 --[===[
 -- implenetation wth load() function 
 local loadwithprefix_3 = function(prefix, code)
@@ -502,7 +449,59 @@ if hx_prefix and hx_code then
     print(hx_prefix()) -- 3
 end
 --]===]
---[[ 
+--[[
+local function loadwithprefix(prefix, code)
+    local prefxflg = true
+    return function(...) 
+        local arg = table.pack(...)
+        if prefxflg then 
+            prefxflg = false
+            return load('local x = ' .. arg[1] .. prefix)
+        else 
+            return load(' return ' .. code)
+        end
+      end
+end
+
+local line = io.read()
+local prefix = ' return x; '
+local code = function() return line end
+local fg = loadwithprefix(prefix, code())
+
+for i = 1, math.huge do
+    print(string.rep('*', fg(i)()))    
+end
+--]]
+
+-- This is the better solution i was able to make it run as the assignment asks for --
+--[[
+function loadwithprefix(prefix, code)
+    local prfxflg = false
+
+    return function(...)
+        local x = select(1, ...)
+        local env = { x = x, __index = { _G = _G } }
+
+        if not prfxflg then
+            prfxflg = true
+            return load(prefix, nil, nil, env)
+        else
+            return load(' return ' .. code(), nil, nil, env)
+        end
+    end
+end
+
+local aa = io.read()
+local prefix = ' local x = x ; return x; '
+local code = function() return aa end
+local res = loadwithprefix(prefix, code)
+
+for i = 1, 10 do
+    print(string.rep('*', res(i)()))
+end
+--]]
+
+--[[
 -- Exercise 16.2 --
 
 local multiload = function(prefix, suffix, code)
@@ -526,40 +525,13 @@ local multiload = function(prefix, suffix, code)
     else print('Error in x_code - print()', err) end
 end
 
-
 local prefix, suffix = '', ''
 
 prefix = ' x = 10; '
-
 suffix = ' print(x); '
+
 multiload(prefix, suffix, io.lines("test13.txt", "*L"))
 --]]
--- x = 10
---[[
-local testMe = function()
-    local hex_data, err, x_data, hex_code, local_hex_data = nil, nil, nil, nil, nil
-    local local_hex_code, err = load('x = 10', "local-hex-code", "t", _G)
-    if local_hex_code then 
-        local_hex_data, err = pcall(local_hex_code)
-        if not local_hex_data then print('Error on local-data', err) end
-    else print('Error on local-hex-code', err) end
-    local hex_code, err = load(io.lines("test13.txt", "*L"), "hex_code", "t", _G)
-    if hex_code ~= nil then 
-        hex_data, err = pcall(hex_code)
-        if not hex_data then print('Error on hex_data', err, _G) end
-    else print('Error in hex_code - lines', err) end
-
-    local x_code, err = load('print(x)', 'print(x)', 't', _G)
-    if x_code ~= nil then 
-        x_data, err = pcall(x_code) 
-        if not x_data then print('Error on x_data', err) end
-    else print('Error in x_code - print()', err) end
-end
-
-testMe() -- 17
---]]
-
-
 --[[
 local x = 10
 
@@ -593,13 +565,11 @@ function stringrep (s, n)
     local r = ""
     if n > 0 then
         while n > 1 do
-            if n % 2 ~= 0 then 
-                r = r .. ' ' .. s
-                s = s .. ' ' .. s
-            end
-            r = r .. ' ' .. s
+            if n % 2 ~= 0 then r = r .. ' ' .. s end
+            s = s .. ' ' .. s
             n = math.floor( n /2 ) 
         end
+        r = r .. ' ' .. s
         str = str .. ' ' .. r .. ' ' .. ' return  ' .. ' end '
         return str
     end
@@ -616,7 +586,9 @@ if res_func then
 else print('Error loading func')
 end
 --]]
+
 --  Exercise 16.4  -- 
+	
 --[[
 local function f()
     error("An error occurred!")
@@ -624,10 +596,15 @@ end
 
 local success, result = pcall(pcall, f)
 
-print(success)  -- Output: false
-print(result)   -- Output: An error occurred!
+print(success)  -- Output: true cause first pcall is valid called wth pcall 
+                -- first argument and f function as second argument
+print(result)   -- Output: false cause 2nd pcall f() throws an exception
 --]]
+--[[
+local function f() end
 
-
-
+local success, result = pcall(pcall, f())  -- false bad argument #1 to 'pcall' (value expected)
+print(success)
+print(result)
+--]]
 
