@@ -539,6 +539,7 @@ _ENV = nil
 foo()
 X = 0 -- attempt to index a nil value (upvalue '_ENV')
 --]]
+
 --[===[
 -- Exercise 22.3 --
 local print = print
