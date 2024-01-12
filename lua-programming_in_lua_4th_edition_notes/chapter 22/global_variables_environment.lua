@@ -103,7 +103,6 @@ print(aa.x)  -- Outputs: 5
 print(aa.y)  -- Outputs: 5 (due to __index metamethod)
 --]]
 
-
 -- A first approach simply detects any access to absent keys in the global table
 --[[
 setmetatable(_G, {
@@ -151,7 +150,7 @@ end
 
 testMe()
 --]]
---[[
+--[===[
 setmetatable(_G, {
     __newindex = function (t, n, v)
         local w = debug.getinfo(2, "S").what  -- kaleitai apo regular lua function
@@ -166,15 +165,15 @@ setmetatable(_G, {
          end
     end,
 })
---]]
+
 -- print(kk) -- kk is undeclared 
 -- local kk = nil
---print(kk) -- nil
+-- print(kk) -- nil
 --]]
---[[
+
 c = nil -- rawset() does not allow it ot be declared
 print(c) -- c is undeclared
---]]
+--]===]
 --[[
 local declaredNames = {}
 setmetatable(_G, {
@@ -280,13 +279,12 @@ local a = 12
 print(a) --> 12 (local)
 print(_G.a) --> 13 (global)
 --]]
-
 --[[
 local x = 10
-local _ENV = { y = 20 }
+local _ENV, print = { y = 20 }, _G.print
 
--- print(x) -- Accessing local variable, global_vars.lua:266: attempt to call a nil value (global 'print')
--- print(y) -- Accessing variable from the custom environment
+print(x) -- 10
+print(y) -- 20
 --]]
 
 --[[
@@ -365,12 +363,44 @@ f2 = factory{a = 7}
 print(f1()) --> 6
 print(f2()) --> 7
 --]]
---[[
--- for modules --
+--[===[
+--[[To access other modules, we can use one of the methods we discussed in the previous section. For 
+instance,
+we can declare a local variable that holds the global environment:--]]
 local M = {}
 local _G = _G
 _ENV = nil
+-- We then prefix global names with _G and module names with M.
+--]===]
 
+-- for modules, after _ENV assigned to value nil,  --
+-- every declaration of global variable will raise an error --
+--[[
+-- for example
+-- Module using the basic method
+local M = {}
+_ENV = M  -- Setting _ENV to the module's table
+
+function M.add(x, y)
+    return x + y
+end
+
+function M.subtract(x, y)
+    return x - y
+end
+
+-- Now, to avoid creating globals by mistake:
+_ENV = nil  -- Setting _ENV to nil
+
+-- Attempt to create a global variable, which should raise an error
+globalVariable = 42  -- This line will raise an error, 
+                     -- attempt to index a nil value (upvalue '_ENV')
+
+-- Accessing module functions
+print(M.add(10, 5))      -- Output: 15
+print(M.subtract(10, 5)) -- Output: 5
+--]]
+--[[
 -- or --
 -- module setup
 local M = {}
@@ -380,12 +410,66 @@ local sqrt = math.sqrt
 local io = io
 -- no more external access after this point
 _ENV = nil
+
+ab = 100 -- attempt to index a nil value (upvalue '_ENV')
+print(ab)
 --]]
 
---[[
-env = {}
-loadfile("config.lua", "t", env)()
---]]
+--[===[
+-- foo.lua file
+function foo(x)
+    print(x)
+end
+
+-- main.lua file
+local env = {}
+local ds, error1 = loadfile("foo.lua", "t", env)
+
+if ds then 
+    local _G = _G
+    _ENV = env
+    _ENV.pcall = _G.pcall
+
+    -- Set _ENV.print explicitly
+    _ENV.print = _G.print
+
+    local success, error2 = pcall(ds, 9)
+    if not success then
+        error(error2)
+    end
+
+    -- Call foo(9) in the new environment
+    foo(9)
+
+    _ENV = _G -- Restore the original environment
+else
+    error(error1)
+end
+--]===]
+--[===[
+local env = {}
+local _G = _G
+_ENV = env
+_ENV.load, _ENV.print = _G.load, _G.print
+
+local function loadMe()
+    local ds1, error1 = load(' function me(x) print(x) end', nil, 't', _ENV)
+    if ds1 ~=  nil then 
+        return ds1
+    else
+        error(error1)
+    end
+end
+
+local ds1 = loadMe()
+ds1()
+_ENV = env 
+me(5)
+
+_ENV = _G
+--]===]
+
+
 --[[
 f = load("b = 10; return a")
 env = {a = 20}
@@ -419,16 +503,23 @@ local a = getfield('io.write')
 print(a)
 --]===]
 
---[[
+--[===[
 -- Exercise 22.2 --
 
 local foo
 do
     local _ENV = _ENV
-    for v in pairs(_ENV)
- do
-    print(v)
- end
+    for v in pairs(_ENV) -- although _ENV is nil it gives the right fields of _G cause
+                         -- pairs refers to the _G environment by default unless i specify a different 
+                         -- environment
+                         --[[
+                         for example for v in pairs({a,b,c}) do ... or
+                                     local the_local_env = _ENV
+                                     for v in pairs (the_local_env) do ...   
+                         --]]
+    do
+        print(v)
+    end
     function foo () print(X) end
 end
 -- print(local_ENV) -- nil
@@ -436,9 +527,19 @@ X = 13
 _ENV = nil
 foo() -- 13
 X = 0 -- global_vars.lua:406: attempt to index a nil value (upvalue '_ENV')
---]]
-
+--]===]
 --[[
+local foo
+do
+    local _ENV = _ENV
+    function foo () print(X) end
+end
+X = 13
+_ENV = nil
+foo()
+X = 0 -- attempt to index a nil value (upvalue '_ENV')
+--]]
+--[===[
 -- Exercise 22.3 --
 local print = print
 function foo (_ENV, a)
@@ -447,22 +548,11 @@ end
 foo({b = 14}, 12) -- 26
 foo({b = 10}, 1) -- 11
 --]]
---[[
+
 local print = print
 function foo (_ENV, a)
     print(a + b)
 end
 foo({b = 14}, 12) -- 26
 foo({b = 10}, 1) -- 11
-
-do
-    local print = print
-    function foo(_ENV, a)
-        print(a + b)
-    end
-end
-
-foo({b = 14}, 12)
-foo({b = 10}, 1)
-_ENV = nil
---]]
+--]===]
