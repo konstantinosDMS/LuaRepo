@@ -49,7 +49,8 @@ print   10
 [profiler.lua]:0        2 --> this is the f() and loadfile()
 [main_lua.lua]:1 (testMe)       30
 sethook 1
-[main_lua.lua]:0        25    
+[main_lua.lua]:0        25  --> how many times  main_lua.lua chunk was detected and executed from the 
+                            -- profiler main chunk  (that is why 0 is there ...)
 --]]
 
 
