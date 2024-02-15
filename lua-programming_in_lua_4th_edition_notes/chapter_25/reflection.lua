@@ -479,7 +479,6 @@ for i = 1, #varsFound do
     end
 end
 --]===]
-
 --[===[
 -- Exercise 25.4 --
 -- Function to get variable values with lexical scoping
@@ -529,6 +528,7 @@ function debug2()
     while true do
         io.write("debug> ")
         local line = io.read()
+
         if line == "cont" then break end
 
         -- Run the commands in the created environment
@@ -537,8 +537,9 @@ function debug2()
 end
 
 -- Test the improved debug2 function
-local x = 10
-debug2() 
+--local x = 10
+--print('Env[x] = ', _ENV['x'])
+--debug2() 
 
 function testDebug()
     local y = 20
@@ -624,9 +625,7 @@ function testDebug()
 end
 
 testDebug()
-
 --]===]
-
 --[===[
 -- Exercise 25.6 --
 
@@ -646,6 +645,7 @@ testDebug()
  
  function getname (func)
      local n = Names[func]
+     if n == nil then return 'Unknown' end
      if n.what == "C" then
          return n.name
      end
@@ -656,9 +656,9 @@ testDebug()
          return lc
      end
  end
- 
- local f = assert(loadfile(arg[1]))
- debug.sethook(hook, 'called')
+
+local f = assert(loadfile("main_lua.lua"))
+ debug.sethook(hook, 'c', 1)
  f()
  debug.sethook()
  
@@ -668,123 +668,120 @@ testDebug()
  end
 
  table.sort(array, function(a, b) return a.value > b.value end)
-Counters = array
-
- for func, count in pairs(Counters) do
-     print(getname(func), count)
+ 
+ Counters = array
+ 
+ for i = 1, #array do
+    for k, v in pairs(array[i]) do
+        print(k, v)
+    end
  end
- --]===]
-
--- Exercise 25.8 --
+--]===]
 --[===[
-local debug = require "debug"
+-- Exercise 25.8 --
 
--- Maximum "steps" that can be performed
-local steplimit = 1000
 local count = 0
-
--- Counter for steps
--- Set of authorized functions
+local steplimit = 1000
 local validfunc = {}
 
--- Hook function to check if the called function is authorized
-local function hook(event)
-    local info
-    if event == "call" then
-        local info = debug.getinfo(2, "fn")
-        if not validfunc[info.func] then
-            error("calling bad function: " .. (info.name or "?"))
+function my_hook()
+    local level = 0
+    for i = 1, math.huge do
+        local info = debug.getinfo(level, "fn")
+        if info ~= nil then
+            for k, v in pairs(info) do 
+                if info.func ~= nil then
+                    if level == 0 or level == 1 or level == 2 or level == 3  then
+                        if _ENV[info.func] == nil then
+                            validfunc[info.func] = true
+                        end
+                    end
+                end
+            end
+        else break end
+    end
+
+    if info and info.func then 
+        if validfunc[info.func] then
+            count = count + 1
+            if count > steplimit then
+                error("script uses too much CPU")
+            end
+            print(string.format("%s, %s, %d", info.func, info.name, count))
         end
     end
-    count = count + 1
-    if count > steplimit then
-        error("script uses too much CPU")
-    end
-    print(string.format('func_name:%s, count:%d', info.name, count))
+    level = level + 1
 end
 
--- Load chunk
-local chunkEnv = setmetatable({}, { __index = _G })
-local f, errorMsg = loadfile("test_lua_exercise_25_8.lua", "t", chunkEnv)
-if not f then
-    error("Error loading file: " .. errorMsg)
+local my_env = setmetatable({}, {__index = _G})
+local my_chunk = assert(loadfile('test_lua_exercise_25_8.lua', "t", my_env))
+if my_chunk ~= nil then
+    my_chunk()
 end
 
--- Set hook
-debug.sethook(hook, "c", 100)
-
--- Run chunk
-f()
-
--- Capture the functions defined in the chunk and add them to the validfunc table
-for k, v in pairs(chunkEnv) do
-    if type(v) == "function" then
-        validfunc[k] = true
-    end
+function aaah()
+    print('aaah')
 end
 
--- Set hook to nil to disable it after the execution
+debug.sethook(my_hook, "c")
+
+aaah()
+
 debug.sethook()
 
--- Print the authorized functions
 for k, v in pairs(validfunc) do
     print(k, v)
 end
 --]===]
 
+--[===[
 -- Exercise 25.7 --
 local breakpoints = {}
 
-function callhook(event, line)
-    local info = debug.getinfo(2, "n")
-    if breakpoints[info.func] then
+local function linehook(event, line)
+    local info = debug.getinfo(2, "fn")
+    print(string.format("Linehook event, %s: line: %d", info.name, line))
+    local func = info.func
+    local breakpoint = breakpoints[func]
+    if breakpoint and line == breakpoint.line then
+        print("lineHook - Breakpoint reached at line:", line)
+        debug.debug()
+    end
+end
+
+local function callhook(event)
+    local info = debug.getinfo(2, "fn")
+    if event == "call" and breakpoints[info.func] then
         debug.sethook(linehook, "l")
     end
 end
 
-function linehook(event, line)
-    if event == 'line' then
-        local info = debug.getinfo(2, "n")
-        local breakpoint = breakpoints[info.func]
-        if breakpoint and line == breakpoint.line then
-            debug.debug()
-        end
-    end
+local function setbreakpoint(func, line)
+    breakpoints[func] = { line = line }
+    debug.sethook(callhook, "c")
+    return func
 end
 
-function setbreakpoint(func_name, line)
-    local func = _G[func_name]
-    if func then
-        breakpoints[func] = { line = line }
-        debug.sethook(callhook, "c")
-    else
-        error("Function not found: " .. func_name)
-    end
-end
-
-function removebreakpoint(func_name)
-    local func = _G[func_name]
-    if func then
-        breakpoints[func] = nil
-        debug.sethook()
-    else
-        error("Function not found: " .. func_name)
-    end
+local function removebreakpoint(handle)
+    breakpoints[handle] = nil
+    debug.sethook()
 end
 
 function myfunc()
-    print('a')
-    print('b')
-    print('c')
-    print('d')
-    print('e')
+    print("Hello from myfunc_1")
+    print("Hello from myfunc_2")
+    print("Hello from myfunc_3")
 end
 
--- Set a breakpoint in myfunc at line 3
-setbreakpoint('myfunc', 3)
+-- Set a breakpoint at line 2 in myfunc
+local func = setbreakpoint(myfunc, 775)
+
+-- Call myfunc to test the breakpoint
 myfunc()
 
--- Remove the breakpoint in myfunc
-removebreakpoint('myfunc')
-myfunc()
+-- Remove the breakpoint
+removebreakpoint(func)
+--]===]
+
+
 
