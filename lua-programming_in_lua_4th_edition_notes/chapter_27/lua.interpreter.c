@@ -99,6 +99,7 @@ int main() {
 /**
 int string_reader(lua_State *L, void *data, size_t *size) {
     const char *luaCode = (const char *)data;
+    //printf("%s\n", luaCode);
     *size = strlen(luaCode);
     lua_pushlstring(L, luaCode, *size);
     return LUA_OK;
@@ -108,13 +109,15 @@ int main() {
     lua_State *L = luaL_newstate();
     luaL_openlibs(L);
 
-    const char *luaCode = "print('Hello, Lua!')";
+    const char *luaCode = "print(\"Hello, Lua!\")";
     
     // Load Lua code from a string using lua_load
-    if (lua_load(L, (lua_Reader)string_reader, (void *)luaCode, "chunk", "t") == LUA_OK) {
+    //if (lua_load(L, (lua_Reader)string_reader, (void *)luaCode, "chunk", "t") == LUA_OK) {
+    if (luaL_loadstring(L, luaCode) == LUA_OK) {
         // Execute the loaded chunk
-        if (lua_pcall(L, 0, 0, 0) != LUA_OK) {
+        if (lua_pcall(L, 0, 0, 0) != LUA_OK) {  
             fprintf(stderr, "Error: %s\n", lua_tostring(L, -1));
+            exit(0);
         }
     } else {
         fprintf(stderr, "Error loading Lua code\n");
@@ -122,6 +125,7 @@ int main() {
 
     lua_close(L);
     return 0;
+}
 **/
 /**
 static int my_stack(lua_State *L){
@@ -150,8 +154,7 @@ int main() {
     lua_close(L);
     return 0;
 }
-*/
-
+**/
 /**
 int main(){
     size_t len;
@@ -168,7 +171,7 @@ int main(){
     assert(s[len] == '\0');
     printf("s[len] = \'\\0\'\n");
     assert(strlen(s) <= len);
-    printf("strlen(s) = %d\n", strlen(s));
+    printf("strlen(s) = %li\n", strlen(s));
     // Instead, you should use the len returned by lua_tolstring
     printf("Length of Lua string: %zu\n", len);
 
@@ -176,8 +179,8 @@ int main(){
     lua_close(L);
     return 0;
 }
-*/
-/**
+**/
+
 static void stackDump (lua_State *L) {
     int i;
     int top = lua_gettop(L); // depth of the stack 
@@ -209,7 +212,7 @@ static void stackDump (lua_State *L) {
     }
     printf("\n"); // end the listing 
 }
-
+/**
 int main(){
     lua_State *L = luaL_newstate();
     luaL_openlibs(L);
@@ -224,7 +227,7 @@ int main(){
     lua_pushnumber(L, 55.44);
     stackDump(L);
 }
-*/
+**/
 /*
 int main (void) {
     lua_State *L = luaL_newstate();
@@ -278,7 +281,6 @@ int main(){
     return 0;
 }
 */
-
 // Exercise 27.4 //
 
 // typedef void * (*Lua_Alloc) (void *ud, void *ptr, size_t osize, size_t nsize); //
@@ -326,6 +328,7 @@ static int lua_setlimit(lua_State *L) {
 // Create a Lua state with the limited allocator
 lua_State *luaL_newstate_with_limit(size_t memory_limit) {
     lua_State *L = luaL_newstate();
+    luaL_openlibs(L);
 
     if (L != NULL) {
         // Allocate and initialize MemoryLimitData
@@ -341,6 +344,8 @@ lua_State *luaL_newstate_with_limit(size_t memory_limit) {
             lua_pushlightuserdata(L, data);
             lua_pushcclosure(L, lua_setlimit, 1);
             lua_setglobal(L, "setlimit");
+            printf("Memory Limit: %ld\n", data->memory_limit);
+            printf("Memory Used: %ld\n", data->memory_used);
         } else {
             lua_close(L);
             L = NULL;
@@ -353,16 +358,20 @@ lua_State *luaL_newstate_with_limit(size_t memory_limit) {
 // Example usage
 int main() {
     // Create a Lua state with a memory limit of 1000 bytes
-    lua_State *L = luaL_newstate_with_limit(1000);
+    lua_State *L = luaL_newstate_with_limit(1200);
 
     if (L != NULL) {
         // Load and execute Lua script (e.g., script.lua)
-        luaL_dofile(L, "script.lua");
+        int result = luaL_dofile(L, "script.lua");
         
+        if (result != LUA_OK) {
+            const char *errorMessage = lua_tostring(L, -1);
+            printf("Error loading Lua script: %s\n", errorMessage);
+        }
+
         // Close the Lua state
         lua_close(L);
     }
 
     return 0;
 }
-
