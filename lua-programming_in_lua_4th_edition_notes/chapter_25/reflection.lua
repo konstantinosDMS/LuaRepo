@@ -1,27 +1,30 @@
---[===[
+--[[
 function traceback ()
     for level = 1, math.huge do
         local info = debug.getinfo(level, "Sl")
         if not info then break end
         if info.what == "C" then -- is a C function?
-            print(string.format("%d\tC function", level))
+            print(string.format("level:%d, short_src:%s, currentline:%d, name:%s, linedefined:%d, lastlinedefined:%d\t-C function-", level,
+                                    info.short_src, info.currentline, info.name, info.linedefined,
+                                    info.lastlinedefined))
         else -- a Lua function
-            print(string.format("%d\t[%s]:%d", level, info.short_src, info.currentline))
+            print(string.format("level:%d, short_src:[%s], currentline:%d, , name:%s, linedefined:%d, lastlinedefined:%d", level,
+                                    info.short_src, info.currentline, info.name, info.linedefined,
+                                    info.lastlinedefined))
         end
     end
 end
 
 traceback()
---]===]
+--]]
+--print(debug.traceback())
 --[[
-print(debug.traceback())
-
 stack traceback:
         /home/konstantinos/Downloads/lua/apps/reflection.lua:16: in main chunk
         [C]: in ?
 --]]
 --]===]
---[===[
+--[[
 function foo (a, b)
     local x
     do local c = a - b end
@@ -35,8 +38,8 @@ function foo (a, b)
 end
 
 foo(10, 20)
---]===]
---[===[
+--]]
+--[[
 function foo (...)
     local x
     local t, r, e = ...
@@ -51,13 +54,13 @@ function foo (...)
 end
 
 foo(10, 20, 30)
---]===]
+--]]
 --[[
     (vararg)        10
     (vararg)        20
     (vararg)        30
 --]]
---[===[
+--[[
 function foo (...)
     local x
     local t, r, e = ...
@@ -74,13 +77,14 @@ function foo (...)
 end
 
 foo(10, 20, 30)
+--]]
 --[[
 (vararg)        15
 (vararg)        15
 (vararg)        15    
 --]]
 --]===]
---[[
+--[===[
 function getvarvalue (name, level, isenv)
     local value
     local found = false
@@ -109,9 +113,9 @@ function getvarvalue (name, level, isenv)
     end
 end
 
-a = "xx"; print(getvarvalue("a")) -- local xx
-local a = 4; print(getvarvalue("a")) -- local  4
---]]
+-- a = "xx"; print(getvarvalue("a")) -- global xx
+-- local a = 4; print(getvarvalue("a")) -- local  4
+--]===]
 
 --[===[
 debug.sethook(print, "l")
@@ -120,42 +124,68 @@ co = coroutine.create(function ()
         local x = 10
         coroutine.yield()
         error("some error")
-    end)
+     end)
 
 coroutine.resume(co)
 print(debug.traceback(co))
 --[[
+    line    123
+    line    127
+    line    123
+    line    127
+    line    129
+    line    130
 stack traceback:
         [C]: in function 'coroutine.yield'
-        /home/konstantinos/Downloads/lua/apps/reflection.lua:121: in function </home/konstantinos/Downloads/lua/apps/reflection.lua:119>    
+        /home/konstantinos/Downloads/lua/apps/reflection.lua:125: in function </home/konstantinos/Downloads/lua/apps/reflection.lua:123>
 --]]
 print(coroutine.resume(co)) -- false
 print(debug.traceback(co)) -- stack traceback:
 --[[
-[C]: in function 'coroutine.yield'
-/home/konstantinos/Downloads/lua/apps/reflection.lua:121: in function </home/konstantinos/Downloads/lua/apps/reflection.lua:119>
-false   /home/konstantinos/Downloads/lua/apps/reflection.lua:122: some error
+    line    122
+    line    126
+    line    122
+    line    126
+    line    128
+    line    129
 stack traceback:
-[C]: in function 'error'
-/home/konstantinos/Downloads/lua/apps/reflection.lua:122: in function </home/konstantinos/Downloads/lua/apps/reflection.lua:119>
+        [C]: in function 'coroutine.yield'
+        /home/konstantinos/Downloads/lua/apps/reflection.lua:124: in function </home/konstantinos/Downloads/lua/apps/reflection.lua:122>
+        line    141
+        false   /home/konstantinos/Downloads/lua/apps/reflection.lua:125: some error
+        line    142
+stack traceback:
+        [C]: in function 'error'
+        /home/konstantinos/Downloads/lua/apps/reflection.lua:125: in function </home/konstantinos/Downloads/lua/apps/reflection.lua:122>--]]
 --]]
 print(debug.getlocal(co, 1, 1)) -- x       10
 --]===]
---[===[
+
+--[[
 function trace (event, line)
     local s = debug.getinfo(2).short_src
     print(s .. ":" .. line)
 end
 
-debug.sethook(trace, "l")
-
 function printMe()
     print('a')
 end
 
+debug.sethook(trace, "l")
+
 printMe()
---]===]
---[===[
+
+debug.sethook()
+--]]
+--[[
+/home/konstantinos/Downloads/lua/apps/reflection.lua:176
+/home/konstantinos/Downloads/lua/apps/reflection.lua:171
+a
+/home/konstantinos/Downloads/lua/apps/reflection.lua:172
+/home/konstantinos/Downloads/lua/apps/reflection.lua:178
+--]]
+
+--[[
 function debug1 ()
     while true do
         io.write("debug> ")
@@ -165,13 +195,14 @@ function debug1 ()
     end
 end
 
+x = 40
 debug1()
---]===]
---[===[
+--]]
+--[[
 local debug = require "debug"
 local count = 0
 local memlimit = 1000  -- maximum memory (in KB) that can be used
-local steplimit = 1000  -- maximum "steps" that can be performed
+local steplimit = 10  -- maximum "steps" that can be performed
 
 local function checkmem ()
 	if collectgarbage("count") > memlimit then
@@ -183,6 +214,8 @@ end
 local validfunc = {
 	[string.upper] = true,
 	[string.lower] = true,
+    ["f"] = true,
+    ["sethook"] = true
 -- other authorized functions
 }
 
@@ -197,7 +230,7 @@ end
 local function hook (event)
 	if event == "call" then
 		local info = debug.getinfo(2, "fn")
-		if not validfunc[info.func] then
+		if not validfunc[info.name] then
 			error("calling bad function: " .. (info.name or "?"))
 		end
 	end
@@ -208,11 +241,12 @@ local function hook (event)
 	end
 end
 
-local f = assert(loadfile(arg[1], "t", {}))
-debug.sethook(step, "", 100)
-debug.sethook(hook, "", 100)
+local f = assert(loadfile("test_reflection.lua", "t", {}))
+debug.sethook(step, "call", 1)
+debug.sethook(hook, "call", 1)
 f()
---]===]
+debug.sethook()
+--]]
 --[[
 local s = "123456789012345"
 for i = 1, 36 do s = s .. s end
@@ -244,8 +278,9 @@ local co = coroutine.create(coroutineFunction)
 -- Start the coroutine
 coroutine.resume(co, 5)
 
--- Get the local variable (at level 0 -> (coroutine's chunk), 
--- at index 1 -> (coroutine's environment), at index 2 --> caller of the testMe())
+-- Get the local variable (at level 0 -> (coroutine's c chunk), 
+-- at index 1 -> (coroutine's environment), 
+-- at index 2 --> caller of the testMe())
 
 local level = 1
 local index = 1
@@ -282,6 +317,7 @@ end
 
 -- Coroutine function
 local function coroutineFunction(a)
+    print(a)
     local localVar = "Hello from coroutine!"
     a = 9
     print(a)
@@ -293,12 +329,8 @@ coroutine.resume(co, 5)
 
 testMe(co)
 --]]
---[[
-5
-Local variable name:    a
-Local variable value:   5    
---]]
---[[
+
+--[===[
 -- Exercise 25.1 -- 
 function getvarvalue(co, name, level, isenv)
     local value
@@ -350,12 +382,14 @@ end)
 
 coroutine.resume(co, 5, 2)
 print(getvarvalue(co, "a"))
-local a = 4; print(getvarvalue(co, "a"))
+--]===]
+--local a = 4; print(getvarvalue(co, "a"))
+--local d = 8; print(getvarvalue(co, "d")) -- Only wth __env[name] variable fromthe coroutine
 --]]
 --[[
 7
-local   5
-local   5
+local   6
+local   6
 --]]
 
 --[===[
@@ -396,31 +430,30 @@ function setvarvalue (name, val, level, isenv)
         end
     else -- no _ENV available
         return "noenv"
-    end --]]
+    end
 end
 
 --[[
     global  40
     40
 --]]
---[[
+
 local a = 5
 setvarvalue("a", 10, 1)
 print(a)
---]]
+
 --[[
 a 10
 10    
 --]]
 
---[[
 b = 120
 setvarvalue("b", 25)
 print(b)
 -- 25
 --]===]
 
---[===[
+--[[
 -- Exercise 25.3 --
  local varsFound = {}
 
@@ -460,17 +493,30 @@ function getvarvalue (name, level, isenv)
         return "noenv"
     end
 end
-
+--]]
+--[[
 local a = 130
 local gg = getvarvalue("a")
+for i = 1, #gg do
+    for k, v in pairs(gg[i]) do
+        print(k, v)
+    end
+end 
+--]]
 
+--[[
 b = 160
 gg = getvarvalue("b")
+for i = 1, #gg do
+    for j, h in pairs(gg[i]) do
+        print(j, h)
+    end
+end
+--]]
 
+--[[
 local f1 = load(' function myfunc(name, level, isenv) local kostas =  555; getvarvalue(name, level, isenv); end ')
-
 f1()
-
 myfunc('kostas')
 
 for i = 1, #varsFound do
@@ -478,10 +524,11 @@ for i = 1, #varsFound do
         print(k, v)
     end
 end
---]===]
+--]]
+
 --[===[
 -- Exercise 25.4 --
--- Function to get variable values with lexical scoping
+-- Function to get variable values within lexical scoping
 function getvarvalue(name, level)
     local value
     local found = false
@@ -515,15 +562,15 @@ function debug2()
     env.print = _G.print
     -- Set __index metamethod to use getvarvalue for variable access
     setmetatable(env, { __index = function(_, name)
-        local value
-        local varType
-        varType, value = getvarvalue(name, 4)  -- Use level 3 to skip debug2 and debug1 frames
-        if varType == "local" or varType == "upvalue" then
-            return value
-        else
-            error("Variable '" .. name .. "' not found", 2)
-        end
-    end })
+                                        local value
+                                        local varType
+                                        varType, value = getvarvalue(name, 4)  -- Use level 3 to skip debug2 and debug1 frames
+                                        if varType == "local" or varType == "upvalue" then
+                                            return value
+                                        else
+                                            error("Variable '" .. name .. "' not found", 2)
+                                        end
+                                    end })
 
     while true do
         io.write("debug> ")
@@ -537,8 +584,8 @@ function debug2()
 end
 
 -- Test the improved debug2 function
---local x = 10
---print('Env[x] = ', _ENV['x'])
+local x = 10
+print('Env[x] = ', _ENV["x"])
 --debug2() 
 
 function testDebug()
@@ -550,8 +597,7 @@ testDebug()
 --]===]
 
 --[===[
--- Exercise 25.5 -- 
-
+-- Exercise 25.5 --
 function getvarvalue(name, level)
     local value
     local found = false
@@ -585,15 +631,15 @@ function debug2()
     env.print = _G.print
     -- Set __index metamethod to use getvarvalue for variable access
     setmetatable(env, { __index = function(_, name)
-        local value
-        local varType
-        varType, value = getvarvalue(name, 4)  -- Use level 3 to skip debug2 and debug1 frames
-        if varType == "local" or varType == "upvalue" then
-            return value
-        else
-            error("Variable '" .. name .. "' not found", 2)
-        end
-    end })
+                                    local value
+                                    local varType
+                                    varType, value = getvarvalue(name, 4)  -- Use level 3 to skip debug2 and debug1 frames
+                                    if varType == "local" or varType == "upvalue" then
+                                          return value
+                                    else
+                                        error("Variable '" .. name .. "' not found", 2)
+                                    end
+                                end })
 
     local t_start, t_end, t_line, t_val
     while true do
@@ -626,9 +672,10 @@ end
 
 testDebug()
 --]===]
+--]===]
+ 
 --[===[
 -- Exercise 25.6 --
-
  local Counters = {}
  local Names = {}
  
@@ -677,56 +724,56 @@ local f = assert(loadfile("main_lua.lua"))
     end
  end
 --]===]
+
 --[===[
 -- Exercise 25.8 --
-
 local count = 0
 local steplimit = 1000
 local validfunc = {}
 
 function my_hook()
     local level = 0
-    for i = 1, math.huge do
-        local info = debug.getinfo(level, "fn")
-        if info ~= nil then
-            for k, v in pairs(info) do 
-                if info.func ~= nil then
-                    if level == 0 or level == 1 or level == 2 or level == 3  then
-                        if _ENV[info.func] == nil then
-                            validfunc[info.func] = true
-                        end
-                    end
+    local info = debug.getinfo(level, "fnl")
+    while(info) do
+        if info.func then
+            if level == 0 or level == 1 or level == 2 or level == 3 then
+                if _ENV[info.func] == nil then
+                    validfunc[info.func] = true
+                    -- print(info.name)
                 end
             end
-        else break end
+        end
+        level = level + 1
+        info = debug.getinfo(level, "fnl")
     end
 
-    if info and info.func then 
-        if validfunc[info.func] then
+    local current_func_info = debug.getinfo(2, "fnl")
+    if current_func_info and current_func_info.func then
+        if validfunc[current_func_info.func] then
             count = count + 1
             if count > steplimit then
                 error("script uses too much CPU")
             end
-            print(string.format("%s, %s, %d", info.func, info.name, count))
+            print(string.format("%s:%d, %s, %d", current_func_info.func, current_func_info.currentline, current_func_info.name, count))
         end
     end
-    level = level + 1
 end
 
 local my_env = setmetatable({}, {__index = _G})
 local my_chunk = assert(loadfile('test_lua_exercise_25_8.lua', "t", my_env))
 if my_chunk ~= nil then
+    debug.sethook(my_hook, "c")
     my_chunk()
+    debug.sethook()
 end
-
+--]===]
+--[===[
 function aaah()
     print('aaah')
 end
 
 debug.sethook(my_hook, "c")
-
 aaah()
-
 debug.sethook()
 
 for k, v in pairs(validfunc) do
@@ -774,7 +821,7 @@ function myfunc()
 end
 
 -- Set a breakpoint at line 2 in myfunc
-local func = setbreakpoint(myfunc, 775)
+local func = setbreakpoint(myfunc, 818)
 
 -- Call myfunc to test the breakpoint
 myfunc()
