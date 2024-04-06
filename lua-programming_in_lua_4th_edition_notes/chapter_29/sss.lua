@@ -1,0 +1,5 @@
+local co = coroutine.create(function(x, y) 
+                    print(x, y) 
+                    coroutine.yield()  
+                    end) 
+coroutine.resume(co) 
